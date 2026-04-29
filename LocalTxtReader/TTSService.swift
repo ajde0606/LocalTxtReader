@@ -15,16 +15,8 @@ final class TTSService: ObservableObject {
 
         print("Loading CoreML TTS model...")
 
-        // ANE on iPhone uses float16 internally and corrupts this model's output.
-        // cpuAndGPU preserves float32 precision and produces clean audio on all platforms.
-        #if os(iOS)
-        let computeUnits: MLComputeUnits = .cpuAndGPU
-        #else
-        let computeUnits: MLComputeUnits = .all
-        #endif
-
         model = try await Qwen3TTSCoreMLModel.fromPretrained(
-            computeUnits: computeUnits,
+            computeUnits: .all,
             progressHandler: { progress, status in
                 print("TTS load:", status, Int(progress * 100), "%")
             }
