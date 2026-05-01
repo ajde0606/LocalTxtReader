@@ -1,4 +1,5 @@
 import Foundation
+import CoreML
 import Qwen3TTSCoreML
 
 struct ExperimentInput {
