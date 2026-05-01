@@ -56,15 +56,6 @@
       }
     },
     {
-      "identity" : "speech-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/soniqo/speech-swift",
-      "state" : {
-        "branch" : "main",
-        "revision" : "f4500e08ec5963fd94ac6ddc492ddb63c814e1e0"
-      }
-    },
-    {
       "identity" : "swift-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-algorithms.git",

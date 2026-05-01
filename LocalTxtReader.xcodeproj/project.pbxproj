@@ -388,16 +388,12 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		1AE1CFDB2FA0496000F29AF0 /* XCRemoteSwiftPackageReference "speech-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/soniqo/speech-swift";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		1AE1CFDB2FA0496000F29AF0 /* XCLocalSwiftPackageReference "speech-swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = speech-swift;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		1AE1CFDC2FA0496000F29AF0 /* Qwen3TTS */ = {
