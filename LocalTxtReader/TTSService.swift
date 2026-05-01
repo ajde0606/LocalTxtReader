@@ -23,6 +23,33 @@ final class TTSService: ObservableObject {
         )
 
         print("TTS model loaded")
+        debugLogModelFiles()
+    }
+
+    private func debugLogModelFiles() {
+        let fm = FileManager.default
+        let roots = [
+            fm.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+        ].compactMap { $0 }
+
+        var found: [String] = []
+        for root in roots {
+            guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
+            for case let url as URL in enumerator {
+                let name = url.lastPathComponent
+                if name.hasSuffix(".mlmodelc") || name.hasSuffix(".mlpackage") {
+                    found.append(url.path)
+                }
+            }
+        }
+
+        if found.isEmpty {
+            print("MODEL FILES: none found in sandbox (model may be in a different location)")
+        } else {
+            print("MODEL FILES found:")
+            found.forEach { print("  \($0)") }
+        }
     }
 
     func synthesize(text rawText: String, maxTokens: Int) async throws -> [Float] {
