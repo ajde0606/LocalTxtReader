@@ -10,6 +10,7 @@ struct ContentView: View {
 
     @StateObject private var tts = TTSService()
     @State private var player = PCMPlayer()
+    @State private var experimentRunner = TTSExperimentRunner()
 
     var body: some View {
         VStack(spacing: 14) {
@@ -38,6 +39,11 @@ struct ContentView: View {
                     player.stop()
                     status = "Stopped"
                 }
+
+                Button("Experiment") {
+                    Task { await runExperiment() }
+                }
+                .disabled(isBusy)
             }
 
             Text(status)
@@ -125,6 +131,21 @@ struct ContentView: View {
         #else
         return min(120, max(30, cleaned.count * 8))
         #endif
+    }
+
+    @MainActor
+    private func runExperiment() async {
+        isBusy = true
+        defer { isBusy = false }
+        status = "Running experiment…"
+        do {
+            let input = ExperimentInput()
+            let result = try await experimentRunner.run(input)
+            try player.play(samples: result.audioSamples)
+            status = "Experiment done — \(result.audioSamples.count) samples @ \(result.sampleRate) Hz. See Xcode console."
+        } catch {
+            status = "Experiment error: \(error.localizedDescription)"
+        }
     }
 
     @MainActor
