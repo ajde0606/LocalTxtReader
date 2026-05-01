@@ -80,23 +80,18 @@ final class TTSExperimentRunner {
         }
         guard let model else { throw NSError(domain: "TTSExperiment", code: -1) }
 
-        // Stage 1 & 2: requires synthesizeWithIntermediates() — not yet in the package.
-        // Wire these up once that method is added to Qwen3TTSCoreMLModel.
-        let textTokens: [Int] = []
-        let speechCodecTokens: [[Int32]] = []
-
-        // Stage 3: fully wired against the current public API.
-        let audioSamples = try model.synthesize(
+        // All three stages via synthesizeWithIntermediates() in Qwen3TTSCoreMLModel.
+        let intermediates = try model.synthesizeWithIntermediates(
             text: input.text,
             language: input.language,
             maxTokens: 120
         )
 
         let result = ExperimentResult(
-            textTokens: textTokens,
-            speechCodecTokens: speechCodecTokens,
-            audioSamples: audioSamples,
-            sampleRate: 24_000
+            textTokens: intermediates.textTokens,
+            speechCodecTokens: intermediates.codecTokens,
+            audioSamples: intermediates.audioSamples,
+            sampleRate: intermediates.sampleRate
         )
         printResult(input: input, result: result)
         return result
