@@ -2,24 +2,68 @@ import Foundation
 import CoreML
 import Qwen3TTSCoreML
 
+// ── Inputs ────────────────────────────────────────────────────────────────────
+// Note: speakerName and instruction are NOT synthesize() parameters in the
+// current speech-swift API. Speaker is baked into the model at fromPretrained()
+// time via speaker_embedding.npy. Instruction is not supported. They are kept
+// here for documentation and for when the API is extended.
 struct ExperimentInput {
     var text: String = "今天天气很好。"
-    var speakerName: String = "vivan"
+    var speakerName: String = "vivan"   // informational only — see note above
     var language: String = "chinese"
-    var instruction: String = ""
+    var instruction: String = ""        // informational only — see note above
 }
 
+// ── Outputs ───────────────────────────────────────────────────────────────────
 struct ExperimentResult {
-    // stage 1: text → token IDs fed into the LLM
+    // Stage 1: token IDs the Qwen3 tokenizer assigns to the input text.
+    // Populated only when Qwen3TTSCoreMLModel exposes synthesizeWithIntermediates().
     let textTokens: [Int]
 
-    // stage 2: LLM output → discrete codec token IDs (one [Int] per codebook)
-    let speechCodecTokens: [[Int]]
+    // Stage 2: discrete codec token IDs produced by CodeDecoder + MultiCodeDecoder.
+    // Shape: [16 codebooks][N frames].
+    // Populated only when Qwen3TTSCoreMLModel exposes synthesizeWithIntermediates().
+    let speechCodecTokens: [[Int32]]
 
-    // stage 3: codec → raw PCM
+    // Stage 3: raw PCM float samples from SpeechDecoder.
     let audioSamples: [Float]
     let sampleRate: Int
 }
+
+// ── What needs to be added to Qwen3TTSCoreMLModel in speech-swift ─────────────
+//
+// Add this method alongside synthesize() in Qwen3TTSCoreMLModel.swift:
+//
+//   public struct SynthesisIntermediates {
+//       public let textTokens: [Int]
+//       public let codecTokens: [[Int32]]   // [16][N frames]
+//       public let audioSamples: [Float]
+//   }
+//
+//   public func synthesizeWithIntermediates(
+//       text: String,
+//       language: String = "english",
+//       temperature: Float = 0.8,
+//       topK: Int = 50,
+//       maxTokens: Int = 125,
+//       repetitionPenalty: Float = 1.05
+//   ) throws -> SynthesisIntermediates {
+//       // 1. tokenize raw text for logging (PromptBuilder adds extra framing tokens)
+//       let textTokens = tokenizer?.encode(text) ?? []
+//
+//       // 2-3. run the existing synthesis pipeline, but capture allCodebooks
+//       //      before passing to speechDecoder.decode(codes:)
+//       //      (copy the body of synthesize() and surface allCodebooks)
+//       let (codecTokens, audioSamples) = try synthesizeCaptureCodecs(
+//           text: text, language: language, temperature: temperature,
+//           topK: topK, maxTokens: maxTokens, repetitionPenalty: repetitionPenalty)
+//
+//       return SynthesisIntermediates(
+//           textTokens: textTokens,
+//           codecTokens: codecTokens,
+//           audioSamples: audioSamples)
+//   }
+// ─────────────────────────────────────────────────────────────────────────────
 
 @MainActor
 final class TTSExperimentRunner {
@@ -34,36 +78,14 @@ final class TTSExperimentRunner {
             )
             print("[Experiment] Model loaded")
         }
-
         guard let model else { throw NSError(domain: "TTSExperiment", code: -1) }
 
-        // ── Stage 1: text tokens ──────────────────────────────────────────────
-        // TODO: replace with the real tokenizer call once the API is confirmed.
-        // Likely candidate:
-        //   let textTokens = try model.tokenize(
-        //       text: input.text,
-        //       language: input.language,
-        //       speaker: input.speakerName,
-        //       instruction: input.instruction
-        //   )
+        // Stage 1 & 2: requires synthesizeWithIntermediates() — not yet in the package.
+        // Wire these up once that method is added to Qwen3TTSCoreMLModel.
         let textTokens: [Int] = []
+        let speechCodecTokens: [[Int32]] = []
 
-        // ── Stage 2: speech codec tokens ─────────────────────────────────────
-        // TODO: replace with the step-by-step call once the API is confirmed.
-        // Likely candidate:
-        //   let speechCodecTokens = try await model.generateCodecTokens(
-        //       text: input.text,
-        //       language: input.language,
-        //       speaker: input.speakerName,
-        //       instruction: input.instruction,
-        //       maxTokens: 120
-        //   )
-        let speechCodecTokens: [[Int]] = []
-
-        // ── Stage 3: audio ────────────────────────────────────────────────────
-        // Current high-level API; works on Mac today.
-        // TODO: add speaker / instruction params once confirmed:
-        //   model.synthesize(text:language:speaker:instruction:maxTokens:)
+        // Stage 3: fully wired against the current public API.
         let audioSamples = try model.synthesize(
             text: input.text,
             language: input.language,
@@ -76,7 +98,6 @@ final class TTSExperimentRunner {
             audioSamples: audioSamples,
             sampleRate: 24_000
         )
-
         printResult(input: input, result: result)
         return result
     }
@@ -85,21 +106,28 @@ final class TTSExperimentRunner {
         print("=== TTSExperiment ===")
         print("Input:")
         print("  text        :", input.text)
-        print("  speakerName :", input.speakerName)
+        print("  speakerName :", input.speakerName, "(baked into model — not a runtime param)")
         print("  language    :", input.language)
-        print("  instruction :", input.instruction.isEmpty ? "(empty)" : input.instruction)
+        print("  instruction :", input.instruction.isEmpty ? "(empty, not supported by API)" : input.instruction)
+
         print("Stage 1 — text tokens (\(result.textTokens.count)):")
-        print(" ", result.textTokens.isEmpty ? "(stub — see TODO in TTSExperiment.swift)" : "\(result.textTokens)")
+        if result.textTokens.isEmpty {
+            print("  (needs synthesizeWithIntermediates() in Qwen3TTSCoreMLModel — see comment above)")
+        } else {
+            print(" ", result.textTokens)
+        }
+
         print("Stage 2 — speech codec tokens (\(result.speechCodecTokens.count) codebooks):")
         if result.speechCodecTokens.isEmpty {
-            print("  (stub — see TODO in TTSExperiment.swift)")
+            print("  (needs synthesizeWithIntermediates() in Qwen3TTSCoreMLModel — see comment above)")
         } else {
             for (i, book) in result.speechCodecTokens.enumerated() {
-                print("  codebook[\(i)] \(book.count) tokens:", book.prefix(8), "…")
+                print(String(format: "  codebook[%2d] %d tokens: %@ …", i, book.count, "\(book.prefix(8))"))
             }
         }
+
         print("Stage 3 — audio:")
-        print("  sampleRate  :", result.sampleRate)
+        print("  sampleRate  :", result.sampleRate, "Hz")
         print("  samples     :", result.audioSamples.count)
         let mn = result.audioSamples.min() ?? 0
         let mx = result.audioSamples.max() ?? 0
